@@ -15,6 +15,7 @@ def run_sdgmssl_mnist():
     mnist_data = mnist.load_semi_supervised(n_labeled=n_labeled, filter_std=0.0, seed=seed, train_valid_combine=True)
 
     n, n_x = mnist_data[0][0].shape  # Datapoints in the dataset, input features.
+    n, n_x = int(n), int(n_x)
     n_samples = 100  # The number of sampled labeled data points for each batch.
     n_batches = n / 100  # The number of batches.
     bs = n / n_batches  # The batchsize.

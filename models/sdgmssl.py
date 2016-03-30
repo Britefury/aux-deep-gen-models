@@ -362,8 +362,12 @@ class SDGMSSL(Model):
 
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 
-    def get_output(self, x, samples=1):
-        return self.f_qy(x, samples)
+    def get_output(self, x, samples=1, batchsize=500):
+        ys = []
+        for i in xrange(0, x.shape[0], batchsize):
+            batch_x = x[i:i+batchsize]
+            ys = self.f_qy(batch_x, samples)
+        return np.concatenate(ys, axis=0)
 
     def model_info(self):
         qa_shapes = self.get_model_shape(get_all_params(self.l_qa))
