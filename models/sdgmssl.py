@@ -366,7 +366,7 @@ class SDGMSSL(Model):
         ys = []
         for i in xrange(0, x.shape[0], batchsize):
             batch_x = x[i:i+batchsize]
-            ys = self.f_qy(batch_x, samples)
+            ys.append(self.f_qy(batch_x, samples))
         return np.concatenate(ys, axis=0)
 
     def model_info(self):
