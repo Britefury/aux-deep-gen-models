@@ -4,7 +4,7 @@ from lasagne import init
 from base import Model
 from lasagne_extensions.layers import (SampleLayer, MultinomialLogDensityLayer,
                                        GaussianLogDensityLayer, StandardNormalLogDensityLayer, BernoulliLogDensityLayer,
-                                       InputLayer, DenseLayer, DimshuffleLayer, ElemwiseSumLayer, ReshapeLayer,
+                                       InputLayer, DenseLayer, NINLayer, DimshuffleLayer, ElemwiseSumLayer, ReshapeLayer,
                                        NonlinearityLayer, BatchNormLayer, get_all_params, get_output)
 from lasagne_extensions.objectives import categorical_crossentropy, categorical_accuracy
 from lasagne_extensions.nonlinearities import rectify, softplus, sigmoid, softmax
@@ -21,7 +21,7 @@ class SDGMSSL(Model):
     Auxiliary Generative Models article on Arxiv.org.
     """
 
-    def __init__(self, n_x, n_a, n_z, n_y, qa_hid, qz_hid, qy_hid, px_hid, pa_hid, nonlinearity=rectify,
+    def __init__(self, shape_x, f_enc, f_dec, n_a, n_z, n_y, qa_hid, qz_hid, qy_hid, px_hid, pa_hid, nonlinearity=rectify,
                  px_nonlinearity=None, x_dist='bernoulli', batchnorm=False, seed=1234):
         """
         Initialize an skip deep generative model consisting of
@@ -29,7 +29,7 @@ class SDGMSSL(Model):
         generative model P p(a|z,y) and p(x|a,z,y),
         inference model Q q(a|x) and q(z|a,x,y).
         Weights are initialized using the Bengio and Glorot (2010) initialization scheme.
-        :param n_x: Number of inputs.
+        :param shape_x: Number of inputs.
         :param n_a: Number of auxiliary.
         :param n_z: Number of latent.
         :param n_y: Number of classes.
@@ -42,10 +42,10 @@ class SDGMSSL(Model):
         :param batchnorm: Boolean value for batch normalization.
         :param seed: The random seed.
         """
-        super(SDGMSSL, self).__init__(n_x, qz_hid + px_hid, n_a + n_z, nonlinearity)
+        super(SDGMSSL, self).__init__(shape_x, qz_hid + px_hid, n_a + n_z, nonlinearity)
         self.x_dist = x_dist
         self.n_y = n_y
-        self.n_x = n_x
+        self.shape_x = shape_x
         self.n_a = n_a
         self.n_z = n_z
         self.batchnorm = batchnorm
@@ -57,11 +57,20 @@ class SDGMSSL(Model):
         if nonlinearity == rectify or nonlinearity == softplus:
             hid_w = "relu"
 
+        if len(shape_x) == 1:
+            x_tensor_constructor = T.matrix
+        elif len(shape_x) == 2:
+            x_tensor_constructor = T.tensor3
+        elif len(shape_x) == 3:
+            x_tensor_constructor = T.tensor4
+        else:
+            raise TypeError, 'shape_x should have 1, 2 or 3 dimensions, not {0}'.format(len(shape_x))
+
         # Define symbolic variables for theano functions.
         self.sym_beta = T.scalar('beta')  # scaling constant beta
-        self.sym_x_l = T.matrix('x')  # labeled inputs
+        self.sym_x_l = x_tensor_constructor('x')  # labeled inputs
         self.sym_t_l = T.matrix('t')  # labeled targets
-        self.sym_x_u = T.matrix('x')  # unlabeled inputs
+        self.sym_x_u = x_tensor_constructor('x')  # unlabeled inputs
         self.sym_bs_l = T.iscalar('bs_l')  # number of labeled data
         self.sym_samples = T.iscalar('samples')  # MC samples
         self.sym_z = T.matrix('z')  # latent variable z
@@ -74,17 +83,23 @@ class SDGMSSL(Model):
                 dense = BatchNormLayer(dense)
             return NonlinearityLayer(dense, self.transf)
 
-        def stochastic_layer(layer_in, n, samples, nonlin=None):
-            mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+        def stochastic_layer(layer_in, n, samples, nonlin=None, flatten=True):
+            if flatten or len(layer_in.output_shape) == 2:
+                mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+                logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+            else:
+                mu = NINLayer(layer_in, n, W=init.Normal(init_w), b=init.Normal(init_w), nonlinearity=nonlin)
+                logvar = NINLayer(layer_in, n, W=init.Normal(init_w), b=init.Normal(init_w), nonlinearity=nonlin)
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         # Input layers
-        l_x_in = InputLayer((None, n_x))
+        l_x_in = InputLayer((None, shape_x))
         l_y_in = InputLayer((None, n_y))
 
+        l_x_enc = f_enc(l_x_in)
+
         # Auxiliary q(a|x)
-        l_qa_x = l_x_in
+        l_qa_x = l_x_enc
         for hid in qa_hid:
             l_qa_x = dense_layer(l_qa_x, hid)
         l_qa_x, l_qa_x_mu, l_qa_x_logvar = stochastic_layer(l_qa_x, n_a, self.sym_samples)
@@ -92,7 +107,7 @@ class SDGMSSL(Model):
         # Classifier q(y|a,x)
         l_qa_to_qy = DenseLayer(l_qa_x, qy_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
         l_qa_to_qy = ReshapeLayer(l_qa_to_qy, (-1, self.sym_samples, 1, qy_hid[0]))
-        l_x_to_qy = DenseLayer(l_x_in, qy_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
+        l_x_to_qy = DenseLayer(l_x_enc, qy_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
         l_x_to_qy = DimshuffleLayer(l_x_to_qy, (0, 'x', 'x', 1))
         l_qy_xa = ReshapeLayer(ElemwiseSumLayer([l_qa_to_qy, l_x_to_qy]), (-1, qy_hid[0]))
         if batchnorm:
@@ -106,7 +121,7 @@ class SDGMSSL(Model):
         # Recognition q(z|x,a,y)
         l_qa_to_qz = DenseLayer(l_qa_x, qz_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
         l_qa_to_qz = ReshapeLayer(l_qa_to_qz, (-1, self.sym_samples, 1, qz_hid[0]))
-        l_x_to_qz = DenseLayer(l_x_in, qz_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
+        l_x_to_qz = DenseLayer(l_x_enc, qz_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
         l_x_to_qz = DimshuffleLayer(l_x_to_qz, (0, 'x', 'x', 1))
         l_y_to_qz = DenseLayer(l_y_in, qz_hid[0], init.GlorotNormal(hid_w), init.Normal(init_w), None)
         l_y_to_qz = DimshuffleLayer(l_y_to_qz, (0, 'x', 'x', 1))
@@ -144,16 +159,23 @@ class SDGMSSL(Model):
         if batchnorm:
             l_px_azy = BatchNormLayer(l_px_azy)
         l_px_azy = NonlinearityLayer(l_px_azy, self.transf)
-        if len(px_hid) > 1:
-            for hid in px_hid[1:]:
-                l_px_azy = dense_layer(l_px_azy, hid)
+        l_px_azy = f_dec(l_px_azy)
+        if len(l_px_azy.output_shape) == 2:
+            f_lxhat_lyr = lambda input_layer, activation: DenseLayer(input_layer, shape_x[0], W=init.GlorotNormal(),
+                                                                     b=init.Normal(init_w), nonlinearity=activation)
+        else:
+            f_lxhat_lyr = lambda input_layer, activation: NINLayer(input_layer, shape_x[0], W=init.GlorotNormal(),
+                                                                   b=init.Normal(init_w), nonlinearity=activation)
 
+
+        l_px_zy_mu, l_px_zy_logvar = None, None
         if x_dist == 'bernoulli':
-            l_px_azy = DenseLayer(l_px_azy, n_x, init.GlorotNormal(), init.Normal(init_w), sigmoid)
+            l_px_azy = f_lxhat_lyr(l_px_azy, sigmoid)
         elif x_dist == 'multinomial':
-            l_px_azy = DenseLayer(l_px_azy, n_x, init.GlorotNormal(), init.Normal(init_w), softmax)
+            l_px_azy = f_lxhat_lyr(l_px_azy, softmax)
         elif x_dist == 'gaussian':
-            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_x, 1, px_nonlinearity)
+            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, shape_x[0], 1, px_nonlinearity,
+                                                                    flatten=False)
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -174,10 +196,10 @@ class SDGMSSL(Model):
         self.l_pa_mu = ReshapeLayer(l_pa_zy_mu, (-1, self.sym_samples, 1, n_a))
         self.l_pa_logvar = ReshapeLayer(l_pa_zy_logvar, (-1, self.sym_samples, 1, n_a))
 
-        self.l_px = ReshapeLayer(l_px_azy, (-1, self.sym_samples, 1, n_x))
-        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
+        self.l_px = ReshapeLayer(l_px_azy, (-1, self.sym_samples, 1,) + shape_x)
+        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, self.sym_samples, 1,) + shape_x) if x_dist == "gaussian" else None
         self.l_px_logvar = ReshapeLayer(l_px_zy_logvar,
-                                        (-1, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
+                                        (-1, self.sym_samples, 1,) + shape_x) if x_dist == "gaussian" else None
 
         # Predefined functions
         inputs = [self.sym_x_l, self.sym_samples]
@@ -262,7 +284,7 @@ class SDGMSSL(Model):
         #   [x[1,0], x[1,1], ..., x[1,n_x]]]         [0, 0, 1]]
         t_eye = T.eye(self.n_y, k=0)
         t_u = t_eye.reshape((self.n_y, 1, self.n_y)).repeat(bs_u, axis=1).reshape((-1, self.n_y))
-        x_u = self.sym_x_u.reshape((1, bs_u, self.n_x)).repeat(self.n_y, axis=0).reshape((-1, self.n_x))
+        x_u = self.sym_x_u.reshape((1, bs_u, self.shape_x)).repeat(self.n_y, axis=0).reshape((-1, self.shape_x))
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
         a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=True, batch_norm_use_averages=False)

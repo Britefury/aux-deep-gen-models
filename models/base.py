@@ -13,18 +13,18 @@ class Model(object):
     It should be subclassed when implementing new types of models.
     """
 
-    def __init__(self, n_in, n_hidden, n_out, trans_func):
+    def __init__(self, shape_in, n_hidden, n_out, trans_func):
         """
         Initialisation of the basic architecture and programmatic settings of any model.
         This method should be called from any subsequent inheriting model.
-        :param n_in: The input features in the model, e.g. 784.
+        :param shape_in: The input shape in the model, e.g. 784.
         :param n_hidden: List containing the number of hidden units in the model, e.g. [500,500].
         :param n_out: The output units in the model, e.g. 10.
         :param batch_size: The size of the batches in the training and test sets, e.g. 100.
         :param trans_func: The transfer function for each hidden layer (cf. nonliniarities.py), e.g. sigmoid.
         """
 
-        self.n_in = n_in
+        self.shape_in = shape_in
         self.n_hidden = n_hidden
         self.n_out = n_out
         self.transf = trans_func
@@ -41,7 +41,7 @@ class Model(object):
         :return: The root path of the model.
         """
         if self.root_path is None:
-            self.root_path = paths.create_root_output_path(self.model_name, self.n_in, self.n_hidden, self.n_out)
+            self.root_path = paths.create_root_output_path(self.model_name, self.shape_in, self.n_hidden, self.n_out)
         return self.root_path
 
     def build_model(self, train_set, test_set, validation_set):
@@ -88,7 +88,7 @@ class Model(object):
         """
         Dump the model into a pickled version in the model path formulated in the initialisation method.
         """
-        p = paths.get_model_path(self.get_root_path(), self.model_name, self.n_in, self.n_hidden, self.n_out)
+        p = paths.get_model_path(self.get_root_path(), self.model_name, self.shape_in, self.n_hidden, self.n_out)
         if not epoch is None: p += "_epoch_%i" % epoch
         if self.model_params is None:
             raise ("Model params are not set and can therefore not be pickled.")
@@ -100,7 +100,7 @@ class Model(object):
         Load the pickled version of the model into a 'new' model instance.
         :param id: The model ID is constructed from the timestamp when the model was defined.
         """
-        model_params = (self.model_name, self.n_in, self.n_hidden, self.n_out, id)
+        model_params = (self.model_name, self.shape_in, self.n_hidden, self.n_out, id)
         root = paths.get_root_output_path(*model_params)
         self.root_path = root
         p = paths.get_model_path(root, *model_params[:-1])

@@ -39,8 +39,8 @@ def get_pickle_path(root_path):
     return path_exists(join(root_path, 'pickled model'))
 
 
-def get_model_path(root_path, type, n_in, n_hidden, n_out):
-    return join(get_pickle_path(root_path), '%s_%s_%s_%s.pkl' % (type, str(n_in), str(n_hidden), str(n_out)))
+def get_model_path(root_path, type, shape_in, n_hidden, n_out):
+    return join(get_pickle_path(root_path), '%s_%s_%s_%s.pkl' % (type, str(shape_in), str(n_hidden), str(n_out)))
 
 
 # Logging
