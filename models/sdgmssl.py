@@ -93,7 +93,7 @@ class SDGMSSL(Model):
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         # Input layers
-        l_x_in = InputLayer((None, shape_x))
+        l_x_in = InputLayer((None,) + shape_x)
         l_y_in = InputLayer((None, n_y))
 
         l_x_enc = f_enc(l_x_in)
@@ -284,7 +284,7 @@ class SDGMSSL(Model):
         #   [x[1,0], x[1,1], ..., x[1,n_x]]]         [0, 0, 1]]
         t_eye = T.eye(self.n_y, k=0)
         t_u = t_eye.reshape((self.n_y, 1, self.n_y)).repeat(bs_u, axis=1).reshape((-1, self.n_y))
-        x_u = self.sym_x_u.reshape((1, bs_u, self.shape_x)).repeat(self.n_y, axis=0).reshape((-1, self.shape_x))
+        x_u = self.sym_x_u.reshape((1, bs_u,) + self.shape_x).repeat(self.n_y, axis=0).reshape((-1,) + self.shape_x)
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
         a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=True, batch_norm_use_averages=False)
