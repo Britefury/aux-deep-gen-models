@@ -49,7 +49,7 @@ def run_sdgmssl_mnist():
 
     # Initialize the auxiliary deep generative model.
     model = SDGMSSL(shape_x=shape_x, f_enc=f_enc, f_dec=f_dec, n_a=100, n_z=100, n_y=10, qa_hid=[500, 500],
-                    qz_hid=[500, 500], qy_hid=[500, 500], px_hid=[500, 500], pa_hid=[500, 500],
+                    qz_hid=[500, 500], qy_hid=[500, 500], px_hid=[512, 512], pa_hid=[500, 500],
                     nonlinearity=rectify, batchnorm=True, x_dist='bernoulli')
 
     # Get the training functions.
