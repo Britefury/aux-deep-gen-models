@@ -15,12 +15,20 @@ def run_sdgmssl_mnist():
     seed = np.random.randint(1, 2147462579)
     n_labeled = 100  # The total number of labeled data points.
     mnist_data = mnist.load_semi_supervised(n_labeled=n_labeled, filter_std=0.0, seed=seed, train_valid_combine=True)
+    train_x = mnist_data[0][0]
+    train_l_x = mnist_data[1][0]
+    test_x = mnist_data[2][0]
+    valid_x = mnist_data[3][0]
+    mnist_data = (train_x.reshape((-1, 1, 28, 28)), mnist_data[0][1]), \
+                (train_l_x.reshape((-1, 1, 28, 28)), mnist_data[1][1]), \
+                (test_x.reshape((-1, 1, 28, 28)), mnist_data[2][1]), \
+                (valid_x.reshape((-1, 1, 28, 28)), mnist_data[3][1])
 
-    n, n_x = mnist_data[0][0].shape  # Datapoints in the dataset, input features.
-    n, n_x = int(n), int(n_x)
+    n_train = int(mnist_data[0][0].shape[0])
+    shape_x = tuple([int(d) for d in mnist_data[0][0].shape[1:]])
     n_samples = 100  # The number of sampled labeled data points for each batch.
-    n_batches = n / 100  # The number of batches.
-    bs = n / n_batches  # The batchsize.
+    n_batches = n_train / 100  # The number of batches.
+    bs = n_train / n_batches  # The batchsize.
 
     def f_enc(layer):
         layer = Conv2DLayer(layer, num_filters=32, filter_size=(5,5), W=init.HeUniform('relu'), nonlinearity=rectify)
@@ -40,7 +48,7 @@ def run_sdgmssl_mnist():
         return layer
 
     # Initialize the auxiliary deep generative model.
-    model = SDGMSSL(shape_x=(n_x,), f_enc=f_enc, f_dec=f_dec, n_a=100, n_z=100, n_y=10, qa_hid=[500, 500],
+    model = SDGMSSL(shape_x=shape_x, f_enc=f_enc, f_dec=f_dec, n_a=100, n_z=100, n_y=10, qa_hid=[500, 500],
                     qz_hid=[500, 500], qy_hid=[500, 500], px_hid=[500, 500], pa_hid=[500, 500],
                     nonlinearity=rectify, batchnorm=True, x_dist='bernoulli')
 
