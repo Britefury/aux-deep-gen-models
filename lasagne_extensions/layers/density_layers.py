@@ -2,6 +2,7 @@ import numpy as np
 import theano.tensor as T
 import lasagne
 from lasagne.layers.base import Layer
+from lasagne.objectives import squared_error
 import math
 
 
@@ -108,3 +109,30 @@ class MultinomialLogDensityLayer(lasagne.layers.MergeLayer):
 
         density = -T.sum(x * T.log(x_mu), axis=sum_axes, keepdims=True)[:,:,:,None]
         return density
+
+
+class SquaredErrorLayer(lasagne.layers.MergeLayer):
+    def __init__(self, x_hat, x, **kwargs):
+        input_lst = [x_hat]
+        self.x = None
+        if not isinstance(x, Layer):
+            self.x, x = x, None
+        else:
+            input_lst += [x]
+        super(SquaredErrorLayer, self).__init__(input_lst, **kwargs)
+
+    def get_output_shape_for(self, input_shapes):
+        return input_shapes[0]
+
+    def get_output_for(self, input, **kwargs):
+        x_hat = input.pop(0)
+        x = self.x if self.x is not None else input.pop(0)
+
+        if x_hat.ndim > x.ndim:  # Check for sample dimensions.
+            x = x.dimshuffle((0, 'x', 'x') + tuple(range(1, x.ndim)))
+
+        sum_axes = tuple(range(3, x.ndim))
+
+        error = T.mean(T.sum(squared_error(x_hat, x), axis=sum_axes, keepdims=True)[:,:,:,None],
+                       axis=(1, 2), keepdims=True)
+        return error
