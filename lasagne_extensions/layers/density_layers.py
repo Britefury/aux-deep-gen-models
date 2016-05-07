@@ -49,6 +49,38 @@ class GaussianLogDensityLayer(lasagne.layers.MergeLayer):
         return T.mean(T.sum(density, axis=-1, keepdims=True), axis=(1, 2), keepdims=True)
 
 
+class UnitGaussianLogDensityLayer(lasagne.layers.MergeLayer):
+    def __init__(self, x_mu, x, eps=1e-6, **kwargs):
+        input_lst = [x_mu]
+        self.eps = eps
+        self.x = None
+
+        if not isinstance(x, Layer):
+            self.x, x = x, None
+        else:
+            input_lst += [x]
+        super(UnitGaussianLogDensityLayer, self).__init__(input_lst, **kwargs)
+
+    def get_output_shape_for(self, input_shapes):
+        return input_shapes[0]
+
+    def get_output_for(self, input, **kwargs):
+        x_mu = input.pop(0)
+        x = self.x if self.x is not None else input.pop(0)
+
+        if x_mu.ndim > x.ndim:  # Check for sample dimensions.
+            x = x.dimshuffle((0, 'x', 'x') + tuple(range(1, x.ndim)))
+
+        sum_axes = tuple(range(3, x.ndim))
+
+        c = - 0.5 * math.log(2 * math.pi)
+        density = c - (x - x_mu) ** 2 / 2
+        density = T.mean(T.sum(density, axis=sum_axes, keepdims=True)[:,:,:,None],
+                         axis=(1, 2), keepdims=True)
+        return density
+
+
+
 class BernoulliLogDensityLayer(lasagne.layers.MergeLayer):
     def __init__(self, x_mu, x, eps=1e-6, **kwargs):
         input_lst = [x_mu]
@@ -111,7 +143,7 @@ class MultinomialLogDensityLayer(lasagne.layers.MergeLayer):
         return density
 
 
-class SquaredErrorLayer(lasagne.layers.MergeLayer):
+class NegativeSquaredErrorLayer(lasagne.layers.MergeLayer):
     def __init__(self, x_hat, x, **kwargs):
         input_lst = [x_hat]
         self.x = None
@@ -119,7 +151,7 @@ class SquaredErrorLayer(lasagne.layers.MergeLayer):
             self.x, x = x, None
         else:
             input_lst += [x]
-        super(SquaredErrorLayer, self).__init__(input_lst, **kwargs)
+        super(NegativeSquaredErrorLayer, self).__init__(input_lst, **kwargs)
 
     def get_output_shape_for(self, input_shapes):
         return input_shapes[0]
@@ -133,6 +165,6 @@ class SquaredErrorLayer(lasagne.layers.MergeLayer):
 
         sum_axes = tuple(range(3, x.ndim))
 
-        error = T.mean(T.sum(squared_error(x_hat, x), axis=sum_axes, keepdims=True)[:,:,:,None],
+        error = T.mean(T.sum(-squared_error(x_hat, x), axis=sum_axes, keepdims=True)[:,:,:,None],
                        axis=(1, 2), keepdims=True)
         return error

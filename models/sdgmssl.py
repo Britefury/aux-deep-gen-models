@@ -4,7 +4,7 @@ from lasagne import init
 from base import Model
 from lasagne_extensions.layers import (SampleLayer, MultinomialLogDensityLayer,
                                        GaussianLogDensityLayer, StandardNormalLogDensityLayer, BernoulliLogDensityLayer,
-                                       SquaredErrorLayer,
+                                       UnitGaussianLogDensityLayer, NegativeSquaredErrorLayer,
                                        InputLayer, DenseLayer, NINLayer, DimshuffleLayer, ElemwiseSumLayer, ReshapeLayer,
                                        NonlinearityLayer, BatchNormLayer, get_all_params, get_output)
 from lasagne_extensions.objectives import categorical_crossentropy, categorical_accuracy
@@ -181,9 +181,9 @@ class SDGMSSL(Model):
         elif x_dist == 'gaussian':
             l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, shape_x[0], 1, px_nonlinearity,
                                                                     flatten=False)
-        elif x_dist == 'hard_tanh':
+        elif x_dist == 'hard_tanh' or x_dist == 'unit_gaussian_hard_tanh':
             l_px_azy = f_lxhat_lyr(l_px_azy, hard_tanh)
-        elif x_dist == 'linear':
+        elif x_dist == 'linear' or x_dist == 'unit_gaussian_linear':
             l_px_azy = f_lxhat_lyr(l_px_azy, linear)
         else:
             raise ValueError('Unknown x_dist {}'.format(x_dist))
@@ -264,7 +264,9 @@ class SDGMSSL(Model):
         elif self.x_dist == 'gaussian':
             l_log_px = GaussianLogDensityLayer(self.l_x_in, self.l_px_mu, self.l_px_logvar)
         elif self.x_dist == 'linear' or self.x_dist == 'hard_tanh':
-            l_log_px = SquaredErrorLayer(self.l_px, self.l_x_in)
+            l_log_px = NegativeSquaredErrorLayer(self.l_px, self.l_x_in)
+        elif self.x_dist == 'unit_gaussian_linear' or self.x_dist == 'unit_gaussian_hard_tanh':
+            l_log_px = UnitGaussianLogDensityLayer(self.l_px, self.l_x_in)
         else:
             raise ValueError('Unknown self.x_dist {}'.format(self.x_dist))
 
