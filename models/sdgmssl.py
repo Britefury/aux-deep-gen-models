@@ -302,7 +302,7 @@ class SDGMSSL(Model):
         t_eye = T.eye(self.n_y, k=0)
         # t_u = t_eye.reshape((self.n_y, 1, self.n_y)).repeat(bs_u, axis=1).reshape((-1, self.n_y))
         # x_u = self.sym_x_u.reshape((1, bs_u,) + self.shape_x).repeat(self.n_y, axis=0).reshape((-1,) + self.shape_x)
-        t_y = T.tile(t_eye, [bs_u, 1])
+        t_u = T.tile(t_eye, [bs_u, 1])
         x_u = self.sym_x_u.repeat(bs_u, axis=0)
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
