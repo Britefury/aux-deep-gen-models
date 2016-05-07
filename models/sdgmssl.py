@@ -294,14 +294,16 @@ class SDGMSSL(Model):
         # Example of input and target matrix for a 3 class problem and batch_size=2. 2D tensors of the form
         #               x_repeat                     t_repeat
         #  [[x[0,0], x[0,1], ..., x[0,n_x]]         [[1, 0, 0]
-        #   [x[1,0], x[1,1], ..., x[1,n_x]]          [1, 0, 0]
         #   [x[0,0], x[0,1], ..., x[0,n_x]]          [0, 1, 0]
-        #   [x[1,0], x[1,1], ..., x[1,n_x]]          [0, 1, 0]
         #   [x[0,0], x[0,1], ..., x[0,n_x]]          [0, 0, 1]
+        #   [x[1,0], x[1,1], ..., x[1,n_x]]          [1, 0, 0]
+        #   [x[1,0], x[1,1], ..., x[1,n_x]]          [0, 1, 0]
         #   [x[1,0], x[1,1], ..., x[1,n_x]]]         [0, 0, 1]]
         t_eye = T.eye(self.n_y, k=0)
-        t_u = t_eye.reshape((self.n_y, 1, self.n_y)).repeat(bs_u, axis=1).reshape((-1, self.n_y))
-        x_u = self.sym_x_u.reshape((1, bs_u,) + self.shape_x).repeat(self.n_y, axis=0).reshape((-1,) + self.shape_x)
+        # t_u = t_eye.reshape((self.n_y, 1, self.n_y)).repeat(bs_u, axis=1).reshape((-1, self.n_y))
+        # x_u = self.sym_x_u.reshape((1, bs_u,) + self.shape_x).repeat(self.n_y, axis=0).reshape((-1,) + self.shape_x)
+        t_y = t_eye.tile([bs_u, 1])
+        x_u = self.sym_x_u.repeat(bs_u, axis=0)
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
         a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=True, batch_norm_use_averages=False)
